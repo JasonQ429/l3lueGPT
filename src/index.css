@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-light: #1E90FF;
+  --secondary-light: #FFFFFF;
+  --accent-light: #32CD32;
+  --background-light: #F5F5F5;
+  --text-light: #1A1A1A;
+  
+  --primary-dark: #0D47A1;
+  --secondary-dark: #121212;
+  --accent-dark: #00E5FF;
+  --background-dark: #000000;
+  --text-dark: #FFFFFF;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-lg font-medium transition-all duration-200
+           flex items-center justify-center gap-2
+           disabled:opacity-50 disabled:cursor-not-allowed
+           dark:disabled:opacity-40;
+  }
+
+  .btn-primary-light {
+    @apply bg-[#1E90FF] text-white hover:bg-[#187bdb]
+           disabled:hover:bg-[#1E90FF];
+  }
+
+  .btn-primary-dark {
+    @apply bg-[#0D47A1] text-white hover:bg-[#0a3882]
+           disabled:hover:bg-[#0D47A1];
+  }
+
+  .input-base {
+    @apply rounded-lg border px-4 py-2.5 w-full
+           transition-all duration-200 outline-none
+           disabled:opacity-50 disabled:cursor-not-allowed
+           resize-none overflow-y-auto;
+  }
+
+  .input-light {
+    @apply border-gray-300 bg-white text-gray-900
+           placeholder-gray-500
+           focus:border-[#1E90FF] focus:ring-2 focus:ring-[#1E90FF] focus:ring-opacity-20;
+  }
+
+  .input-dark {
+    @apply border-gray-700 bg-gray-800 text-gray-100
+           placeholder-gray-400
+           focus:border-[#00E5FF] focus:ring-2 focus:ring-[#00E5FF] focus:ring-opacity-20;
+  }
+}
