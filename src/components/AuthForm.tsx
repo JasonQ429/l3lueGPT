@@ -13,19 +13,6 @@ export function AuthForm({ isDark }: AuthFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
-  const createProfile = async (userId: string, userEmail: string) => {
-    const { error } = await supabase
-      .from('profiles')
-      .insert([{ id: userId, email: userEmail }]);
-    
-    if (error) {
-      if (error.code === '23505') { // Duplicate key error
-        return; // Profile already exists, which is fine
-      }
-      throw error;
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -43,18 +30,15 @@ export function AuthForm({ isDark }: AuthFormProps) {
         if (signUpError) throw signUpError;
         if (!authData.user) throw new Error('Failed to create user');
 
-        await createProfile(authData.user.id, authData.user.email);
+        // Profile will be created by RLS policies
         toast.success('Account created successfully!');
       } else {
-        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (signInError) throw signInError;
-        if (!authData.user) throw new Error('Failed to sign in');
-
-        await createProfile(authData.user.id, authData.user.email);
         toast.success('Signed in successfully!');
       }
     } catch (error) {
@@ -67,12 +51,19 @@ export function AuthForm({ isDark }: AuthFormProps) {
 
   return (
     <div className="w-full max-w-sm mx-auto p-6">
-      <h2 className="text-2xl font-bold text-center mb-8">
+      <h2 className={`text-2xl font-bold text-center mb-8 ${
+        isDark ? 'text-white' : 'text-gray-900'
+      }`}>
         {isSignUp ? 'Create an account' : 'Sign in to l3lueGPT'}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium">
+          <label 
+            htmlFor="email" 
+            className={`block text-sm font-medium mb-2 ${
+              isDark ? 'text-gray-200' : 'text-gray-700'
+            }`}
+          >
             Email
           </label>
           <input
@@ -85,7 +76,12 @@ export function AuthForm({ isDark }: AuthFormProps) {
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium">
+          <label 
+            htmlFor="password" 
+            className={`block text-sm font-medium mb-2 ${
+              isDark ? 'text-gray-200' : 'text-gray-700'
+            }`}
+          >
             Password
           </label>
           <input
@@ -100,20 +96,26 @@ export function AuthForm({ isDark }: AuthFormProps) {
         <button
           type="submit"
           disabled={isLoading}
-          className={`w-full btn-primary ${isDark ? 'btn-primary-dark' : 'btn-primary-light'}`}
+          className={`btn-primary w-full ${isDark ? 'btn-primary-dark' : 'btn-primary-light'}`}
         >
           {isLoading ? (
-            <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+            <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
             isSignUp ? 'Sign up' : 'Sign in'
           )}
         </button>
       </form>
-      <p className="mt-4 text-center text-sm">
+      <p className={`mt-4 text-center text-sm ${
+        isDark ? 'text-gray-300' : 'text-gray-600'
+      }`}>
         {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
         <button
           onClick={() => setIsSignUp(!isSignUp)}
-          className={`font-medium ${isDark ? 'text-[#00E5FF]' : 'text-[#1E90FF]'} hover:opacity-80`}
+          className={`font-medium ${
+            isDark 
+              ? 'text-blue-400 hover:text-blue-300' 
+              : 'text-blue-600 hover:text-blue-700'
+          }`}
         >
           {isSignUp ? 'Sign in' : 'Sign up'}
         </button>

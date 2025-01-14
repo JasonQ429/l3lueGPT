@@ -35,8 +35,20 @@ function formatSystemPrompt(language: 'en' | 'zh'): string {
   });
 
   return language === 'zh'
-    ? `你是一个先进的 AI 助手，使用最新的 Mistral 和 Yi-6B 模型。当前时间：${currentTime}。请用中文回复。`
-    : `You are an advanced AI assistant using the latest Mistral and Yi-6B models. Current time: ${currentTime}. Please respond in English.`;
+    ? `你是一个专业的AI助手。请用简洁、准确的中文回复。当前时间：${currentTime}。
+    
+    请注意：
+    1. 回答要清晰、有条理
+    2. 避免过长的回复
+    3. 使用适当的标点符号
+    4. 保持专业的语气`
+    : `You are a professional AI assistant. Please respond in clear, concise English. Current time: ${currentTime}.
+    
+    Guidelines:
+    1. Keep responses clear and well-structured
+    2. Avoid overly long responses
+    3. Use appropriate punctuation
+    4. Maintain a professional tone`;
 }
 
 async function validateAPIKeys(): Promise<void> {
@@ -75,7 +87,7 @@ async function callMistralAPI(messages: Message[], language: 'en' | 'zh'): Promi
         model: 'mistral-large-latest',
         messages: formattedMessages,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 1000,
         top_p: 0.95,
         presence_penalty: 0.5,
         frequency_penalty: 0.5
@@ -99,61 +111,6 @@ async function callMistralAPI(messages: Message[], language: 'en' | 'zh'): Promi
   }
 }
 
-async function callOpenAssistantAPI(messages: Message[], language: 'en' | 'zh'): Promise<string> {
-  await validateAPIKeys();
-  const openAssistantKey = localStorage.getItem('VITE_OPENASSISTANT_API_KEY');
-
-  const formattedMessages = [
-    { role: 'system', content: formatSystemPrompt(language) },
-    ...messages.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }))
-  ];
-
-  try {
-    const response = await fetch('https://api-inference.huggingface.co/models/01-ai/Yi-6B-200K', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openAssistantKey}`,
-      },
-      body: JSON.stringify({
-        inputs: formattedMessages[formattedMessages.length - 1].content,
-        parameters: {
-          max_new_tokens: 2000,
-          temperature: 0.7,
-          top_p: 0.95,
-          repetition_penalty: 1.2,
-          do_sample: true
-        }
-      }),
-    });
-
-    if (response.status === 503) {
-      const data = await response.json();
-      if (data.error?.includes('Model is currently loading')) {
-        throw new Error('Model is loading, please try again in a moment');
-      }
-    }
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || `OpenAssistant API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    if (!data[0]?.generated_text) {
-      throw new Error('Invalid response from Yi-6B API');
-    }
-
-    return data[0].generated_text;
-  } catch (error) {
-    console.error('Yi-6B API error:', error);
-    throw error;
-  }
-}
-
 export async function getAIResponse(messages: Message[]): Promise<string> {
   if (!messages.length) {
     throw new Error('No messages provided');
@@ -163,15 +120,8 @@ export async function getAIResponse(messages: Message[]): Promise<string> {
   const language = detectLanguage(lastMessage.content);
 
   try {
-    let text: string;
-    try {
-      text = await callMistralAPI(messages, language);
-    } catch (mistralError) {
-      console.warn('Mistral API error, falling back to Yi-6B:', mistralError);
-      text = await callOpenAssistantAPI(messages, language);
-    }
-
-    return marked(text);
+    const response = await callMistralAPI(messages, language);
+    return marked(response);
   } catch (error) {
     if (error.message.includes('API keys not found')) {
       throw new Error(language === 'zh'
