@@ -1,13 +1,38 @@
 import { Message } from '../types/chat';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
+// Configure marked for safe and clean output
 marked.setOptions({
   gfm: true,
   breaks: true,
-  sanitize: false,
+  sanitize: true, // Enable built-in sanitizer
   smartLists: true,
-  smartypants: true
+  smartypants: true,
+  mangle: false,
+  headerIds: false,
+  silent: true
 });
+
+// Clean and format the text content
+function sanitizeContent(content: string): string {
+  // Remove excessive newlines
+  content = content.replace(/\n{3,}/g, '\n\n');
+  
+  // Remove special characters that might cause display issues
+  content = content.replace(/[^\p{L}\p{N}\p{P}\p{Z}\n]/gu, '');
+  
+  // Remove excessive punctuation
+  content = content.replace(/([!?.]){4,}/g, '$1$1$1');
+  
+  // Remove markdown-breaking characters
+  content = content.replace(/([`~])\1{2,}/g, '$1$1$1');
+  
+  // Clean up code blocks
+  content = content.replace(/```{3,}/g, '```');
+  
+  return content.trim();
+}
 
 function detectLanguage(text: string): 'en' | 'zh' {
   const englishRequest = /(?:reply|respond|answer|speak).*(?:in|using) (?:english|英文)/i;
@@ -51,6 +76,35 @@ function formatSystemPrompt(language: 'en' | 'zh'): string {
     4. Maintain a professional tone`;
 }
 
+class AIError extends Error {
+  constructor(message: string, public code: string) {
+    super(message);
+    this.name = 'AIError';
+  }
+}
+
+function getEnglishErrorMessage(error: AIError): string {
+  switch (error.code) {
+    case 'NO_MESSAGES':
+      return 'No messages provided';
+    case 'INVALID_API_KEY':
+      return 'Invalid API key. Please check your settings.';
+    default:
+      return error.message;
+  }
+}
+
+function getChineseErrorMessage(error: AIError): string {
+  switch (error.code) {
+    case 'NO_MESSAGES':
+      return '未提供消息';
+    case 'INVALID_API_KEY':
+      return 'API密钥无效，请检查设置。';
+    default:
+      return error.message;
+  }
+}
+
 async function validateAPIKeys(): Promise<void> {
   const mistralKey = localStorage.getItem('VITE_MISTRAL_API_KEY');
   const openAssistantKey = localStorage.getItem('VITE_OPENASSISTANT_API_KEY');
@@ -60,7 +114,7 @@ async function validateAPIKeys(): Promise<void> {
       detail: { reason: 'invalid_keys' } 
     });
     window.dispatchEvent(event);
-    throw new Error('API keys not found');
+    throw new AIError('API keys not found', 'INVALID_API_KEY');
   }
 }
 
@@ -96,12 +150,12 @@ async function callMistralAPI(messages: Message[], language: 'en' | 'zh'): Promi
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || `Mistral API error: ${response.statusText}`);
+      throw new AIError(error.error?.message || `Mistral API error: ${response.statusText}`, 'API_ERROR');
     }
 
     const data = await response.json();
     if (!data.choices?.[0]?.message?.content) {
-      throw new Error('Invalid response from Mistral API');
+      throw new AIError('Invalid response from Mistral API', 'INVALID_RESPONSE');
     }
 
     return data.choices[0].message.content;
@@ -113,7 +167,7 @@ async function callMistralAPI(messages: Message[], language: 'en' | 'zh'): Promi
 
 export async function getAIResponse(messages: Message[]): Promise<string> {
   if (!messages.length) {
-    throw new Error('No messages provided');
+    throw new AIError('No messages provided', 'NO_MESSAGES');
   }
 
   const lastMessage = messages[messages.length - 1];
@@ -121,19 +175,37 @@ export async function getAIResponse(messages: Message[]): Promise<string> {
 
   try {
     const response = await callMistralAPI(messages, language);
-    return marked(response);
-  } catch (error) {
-    if (error.message.includes('API keys not found')) {
-      throw new Error(language === 'zh'
-        ? '请先设置 API 密钥'
-        : 'Please set up your API keys first'
-      );
-    }
+    
+    // Clean and format the response
+    const sanitizedResponse = sanitizeContent(response);
+    
+    // Convert to markdown and sanitize HTML
+    const htmlContent = marked(sanitizedResponse);
+    const cleanHtml = DOMPurify.sanitize(htmlContent, {
+      ALLOWED_TAGS: [
+        'p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'a'
+      ],
+      ALLOWED_ATTR: ['href', 'target', 'rel'],
+      ALLOW_DATA_ATTR: false,
+      ADD_ATTR: {
+        'a': 'rel="noopener noreferrer" target="_blank"'
+      }
+    });
 
-    console.error('AI response error:', error);
+    return cleanHtml;
+  } catch (error) {
+    if (error instanceof AIError) {
+      const errorMessage = language === 'zh'
+        ? getChineseErrorMessage(error)
+        : getEnglishErrorMessage(error);
+      throw new Error(errorMessage);
+    }
+    
     throw new Error(language === 'zh'
-      ? '获取AI响应时出错：' + error.message
-      : 'Error getting AI response: ' + error.message
+      ? '发生未知错误'
+      : 'An unknown error occurred'
     );
   }
 }
